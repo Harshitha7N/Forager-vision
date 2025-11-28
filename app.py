@@ -1,6 +1,6 @@
 import streamlit as st
 import tensorflow as tf
-from tensorflow import keras
+import keras # Changed to direct import for compatibility
 from tensorflow.keras.applications.densenet import preprocess_input as densenet_preprocess
 from tensorflow.keras.applications.mobilenet_v2 import MobileNetV2, preprocess_input as mobilenet_preprocess, decode_predictions
 from tensorflow.keras.preprocessing import image
@@ -19,43 +19,27 @@ st.set_page_config(
 )
 warnings.filterwarnings("ignore")
 
-# --- 2. THEME MANAGEMENT ---
-if 'dark_mode' not in st.session_state:
-    st.session_state.dark_mode = False
-
-def toggle_theme():
-    st.session_state.dark_mode = not st.session_state.dark_mode
-
-if st.session_state.dark_mode:
-    main_bg = "#0E1117"
-    text_color = "#FAFAFA"
-    card_bg = "#262730"
-    card_border = "#41444C"
-    safe_bg = "#0F3818"
-    safe_text = "#7DDA93"
-    danger_bg = "#3D0F12"
-    danger_text = "#FF8A8A"
-    warning_bg = "#332b00"
-    warning_text = "#ffeeba"
-else:
-    main_bg = "#FFFFFF"
-    text_color = "#2c3e50"
-    card_bg = "#FFFFFF"
-    card_border = "#E0E0E0"
-    safe_bg = "#d4edda"
-    safe_text = "#155724"
-    danger_bg = "#f8d7da"
-    danger_text = "#721c24"
-    warning_bg = "#fff3cd"
-    warning_text = "#856404"
+# --- 2. PERMANENT DARK THEME ---
+# Hardcoded Dark Mode Palette
+main_bg = "#0E1117"
+text_color = "#FAFAFA"
+card_bg = "#262730"
+card_border = "#41444C"
+safe_bg = "#0F3818"
+safe_text = "#7DDA93"
+danger_bg = "#3D0F12"
+danger_text = "#FF8A8A"
+warning_bg = "#332b00"
+warning_text = "#ffeeba"
 
 st.markdown(f"""
     <style>
     .stApp {{ background-color: {main_bg}; color: {text_color}; }}
     [data-testid="stSidebar"] {{ background-color: {card_bg}; }}
-    .main-header {{ font-size: 2.5rem; font-weight: 700; color: {text_color}; text-align: center; }}
+    .main-header {{ font-size: 2.5rem; font-weight: 700; color: {text_color}; text-align: center; margin-bottom: 20px; }}
     .result-card {{ padding: 20px; border-radius: 10px; text-align: center; margin-top: 20px; background-color: {card_bg}; border: 1px solid {card_border}; }}
-    p, h1, h2, h3, label, .stMarkdown {{ color: {text_color} !important; }}
+    .ux-message {{ text-align: center; font-size: 1.1rem; color: {text_color}; margin-bottom: 20px; }}
+    p, h1, h2, h3, label, .stMarkdown, .stText {{ color: {text_color} !important; }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -120,29 +104,28 @@ with st.sidebar:
     
     st.header("Forager Vision")
     st.markdown("---")
-    st.write("Display Settings")
-    st.toggle("🌙 Dark Mode", value=st.session_state.dark_mode, on_change=toggle_theme)
-    st.markdown("---")
     st.info("**System Status:** Online\n\nModel: DenseNet121\nChecks: Toxicity & Species Verification")
 
 # --- 6. MAIN INTERFACE ---
 st.markdown('<div class="main-header">Mushroom Safety Analyzer</div>', unsafe_allow_html=True)
-st.write("Upload a clear photo of a mushroom to detect potential toxicity.")
+st.markdown('<div class="ux-message">Upload a clear photo of a mushroom to detect potential toxicity.</div>', unsafe_allow_html=True)
 
 try:
     main_model, gatekeeper = load_models()
     if main_model is None:
-        st.error("🚨 Model file not found.")
+        st.error("🚨 Model file not found. Please ensure .keras file is in the directory.")
         st.stop()
 except Exception as e:
     st.error(f"Error loading models: {e}")
     st.stop()
 
-uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("", type=["jpg", "jpeg", "png", "webp"])
 
 if uploaded_file is not None:
     col1, col2 = st.columns([1, 1], gap="large")
-    image_pil = Image.open(uploaded_file)
+    
+    # FIX: Convert to RGB immediately to handle 4-channel PNGs
+    image_pil = Image.open(uploaded_file).convert("RGB")
     
     with col1:
         st.subheader("📸 Specimen")
@@ -152,16 +135,19 @@ if uploaded_file is not None:
         st.subheader("🧬 Analysis")
         with st.spinner('Scanning bio-markers...'):
             
-            # STEP 1: GATEKEEPER CHECK
+            # STEP 1: IMPROVED GATEKEEPER CHECK
             if not is_mushroom(image_pil, gatekeeper):
                 st.markdown(f"""
-                    <div class="result-card" style="background-color: {warning_bg}; border: 2px solid {warning_text};">
-                        <h2 style="color: {warning_text}; margin:0;">⚠️ Not Recognized</h2>
-                        <p style="color: {warning_text};">This does not appear to be a mushroom.</p>
+                    <div class="result-card" style="background-color: {warning_bg}; border: 1px solid {warning_text};">
+                        <h3 style="color: {warning_text}; margin:0;">🤔 Object Not Recognized</h3>
+                        <p style="color: {warning_text}; margin-top: 10px;">
+                            We couldn't detect a mushroom in this image.
+                            <br><br>
+                            To ensure accurate safety analysis, please <b>upload a clear, centered photo</b> where the mushroom is the main subject.
+                        </p>
                     </div>
                 """, unsafe_allow_html=True)
-                if not st.checkbox("I confirm this is a mushroom"):
-                    st.stop()
+                st.stop() # Stops execution here. No prediction happens.
 
             # STEP 2: PREDICT TOXICITY
             img_resized = ImageOps.fit(image_pil, (224, 224), Image.Resampling.LANCZOS)
