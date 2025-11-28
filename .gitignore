@@ -1,0 +1,15 @@
+# Ignore the virtual environment folder
+venv/
+env/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore system files
+.DS_Store
+
+# Ignore large datasets if they are still in the folder
+final_dataset/
+train/
+test/
